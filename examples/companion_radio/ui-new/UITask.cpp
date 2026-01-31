@@ -102,9 +102,17 @@ class HomeScreen : public UIScreen {
 
 
   void renderBatteryIndicator(DisplayDriver& display, uint16_t batteryMilliVolts) {
-    // Convert millivolts to percentage
-    const int minMilliVolts = 3000; // Minimum voltage (e.g., 3.0V)
-    const int maxMilliVolts = 4200; // Maximum voltage (e.g., 4.2V)
+    // Convert millivolts to percentage using board-specific voltage ranges
+#ifndef BATTERY_MIN_MILLIVOLTS
+    const int minMilliVolts = 3000; // Default: single-cell LiPo minimum
+#else
+    const int minMilliVolts = BATTERY_MIN_MILLIVOLTS;
+#endif
+#ifndef BATTERY_MAX_MILLIVOLTS
+    const int maxMilliVolts = 4200; // Default: single-cell LiPo maximum
+#else
+    const int maxMilliVolts = BATTERY_MAX_MILLIVOLTS;
+#endif
     int batteryPercentage = ((batteryMilliVolts - minMilliVolts) * 100) / (maxMilliVolts - minMilliVolts);
     if (batteryPercentage < 0) batteryPercentage = 0; // Clamp to 0%
     if (batteryPercentage > 100) batteryPercentage = 100; // Clamp to 100%
