@@ -207,11 +207,53 @@ public:
     }
     
     #ifdef TBEAM_1W_SX1262
-    // Fallback: ADC-based battery voltage estimation for T-Beam 1W
-    // NOTE: This board may not have a voltage divider, so this is approximate
-    // If PMU is missing, we can't accurately measure battery voltage
-    // Return a safe middle-range value (7.4V nominal)
-    return 7400;  // 7.4V nominal for 2S battery
+    // Fallback: ADC-based battery voltage reading for T-Beam 1W
+    // GPIO 35 (ADC1_CH7) - common battery sense pin on T-Beam variants
+    // Assumes 2x 100kΩ voltage divider (8.4V -> 4.2V max at ADC)
+    // Formula: V_batt = (ADC_raw / 4095) * 3.3V * DividerRatio * CalibrationFactor
+    
+    const int BATTERY_ADC_PIN = 35;  // GPIO 35 (ADC1_CH7)
+    const float ADC_REFERENCE_VOLTAGE = 3300.0;  // mV (3.3V reference)
+    const float VOLTAGE_DIVIDER_RATIO = 2.0;     // 1:1 divider (2x 100kΩ)
+    const float CALIBRATION_FACTOR = 1.0;        // Adjust if readings are off
+    static bool adc_initialized = false;
+    
+    if (!adc_initialized) {
+      pinMode(BATTERY_ADC_PIN, INPUT);
+      analogReadResolution(12);  // 12-bit ADC (0-4095)
+      analogSetAttenuation(ADC_11db);  // 11dB attenuation for wider input range
+      adc_initialized = true;
+    }
+    
+    // Read ADC value (average of 16 samples for stability)
+    uint32_t adc_sum = 0;
+    for (int i = 0; i < 16; i++) {
+      adc_sum += analogRead(BATTERY_ADC_PIN);
+      delayMicroseconds(100);
+    }
+    uint16_t adc_raw = adc_sum / 16;
+    
+    // Convert ADC reading to battery voltage
+    // V_batt = (ADC_raw / 4095) * 3.3V * 2 * CalibrationFactor
+    float battery_voltage_f = (adc_raw / 4095.0) * ADC_REFERENCE_VOLTAGE * VOLTAGE_DIVIDER_RATIO * CALIBRATION_FACTOR;
+    uint16_t battery_voltage = (uint16_t)battery_voltage_f;
+    
+    // Debug output (print every 10 seconds)
+    static unsigned long last_debug = 0;
+    if (millis() - last_debug > 10000) {
+      Serial.printf("[BATTERY ADC] raw=%d, voltage=%.2fV (%.0fmV)\n", adc_raw, battery_voltage_f / 1000.0, battery_voltage_f);
+      last_debug = millis();
+    }
+    
+    // Sanity check: if reading is way off, fall back to nominal
+    // Valid 2S Li-ion range: 6.0V (empty) to 8.4V (full)
+    if (battery_voltage < 5500 || battery_voltage > 9000) {
+      // Reading out of range - voltage divider may not exist
+      Serial.printf("[BATTERY ADC] Out of range (%dmV), using fallback 7400mV\n", battery_voltage);
+      return 7400;
+    }
+    
+    return battery_voltage;
     #else
     return 0;  // PMU not available
     #endif
