@@ -162,9 +162,13 @@ public:
   #ifndef TBEAM_SUPREME_SX1262
   void onBeforeTransmit() override{
     digitalWrite(P_LORA_TX_LED, LOW);   // turn TX LED on - invert pin for SX1276
+    #if defined(TBEAM_1W_SX1262) && defined(P_FAN_CTRL)
+    activate_fan();  // Activate cooling fan for 1W PA
+    #endif
   }
   void onAfterTransmit() override{
     digitalWrite(P_LORA_TX_LED, HIGH);   // turn TX LED off - invert pin for SX1276
+    // Fan will auto-shutoff after FAN_RUN_TIME_MS via update_fan_control()
   }
   #endif
 
